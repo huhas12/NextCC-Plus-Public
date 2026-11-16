@@ -9,10 +9,20 @@
     const locale = (document.documentElement.lang || navigator.language || 'en').toLowerCase();
     const UI = window.NCVideoSubtitlesUI;
     const tr = (en, el) => UI ? UI.t(en, el) : (locale.startsWith('el') ? el : en);
+    const appName = 'NextCC+';
     const states = new Map();
     const subtitleExt = /\.(srt|vtt)$/i;
     const videoExt = /\.(mp4|mkv|webm|mov|m4v|ogv|ogg|avi|mpeg|mpg|m2ts|ts)$/i;
     const DAV = 'DAV:';
+
+    function readBranding() {
+        const input = document.getElementById('initial-state-videosubtitles-branding');
+        if (!input) return {};
+        try {
+            const bytes = Uint8Array.from(atob(input.value), character => character.charCodeAt(0));
+            return JSON.parse(new TextDecoder().decode(bytes)) ?? {};
+        } catch (_) { return {}; }
+    }
 
     function element(tag, className, text) {
         const node = document.createElement(tag);
@@ -111,18 +121,33 @@
             this.listController = null;
             this.events = new AbortController();
             const signal = this.events.signal;
+            const branding = readBranding();
 
-            this.button = element('button', 'plyr__control ncvs-button', 'CC+');
+            this.button = element('button', 'plyr__control ncvs-button', appName);
             this.button.type = 'button';
-            this.button.title = tr('Subtitles', 'Υπότιτλοι');
-            this.button.setAttribute('aria-label', this.button.title);
+            this.button.title = appName + ' · ' + tr('Subtitles', 'Υπότιτλοι');
             this.button.setAttribute('aria-expanded', 'false');
             this.panel = element('section', 'ncvs-panel');
             this.panel.hidden = true;
             this.panel.setAttribute('role', 'dialog');
-            this.panel.setAttribute('aria-label', this.button.title);
+            this.panel.setAttribute('aria-label', appName);
             this.header = element('div', 'ncvs-header');
-            this.header.append(element('strong', 'ncvs-heading', this.button.title));
+            const brand = element('div', 'ncvs-brand');
+            const heading = element('h2', 'ncvs-heading', appName);
+            if (typeof branding.logoUrl === 'string' && branding.logoUrl) {
+                const logo = element('img', 'ncvs-logo');
+                logo.alt = appName;
+                logo.width = 504;
+                logo.height = 103;
+                logo.addEventListener('error', () => { heading.textContent = appName; }, { once: true, signal });
+                logo.src = branding.logoUrl;
+                heading.replaceChildren(logo);
+            }
+            brand.append(heading);
+            if (typeof branding.version === 'string' && branding.version) {
+                brand.append(element('p', 'ncvs-version', 'v' + branding.version));
+            }
+            this.header.append(brand);
             this.panel.append(this.header);
             this.select = element('select');
             this.select.append(new Option(tr('Off', 'Ανενεργοί'), ''));
@@ -197,9 +222,7 @@
         }
 
         refreshLabels() {
-            const title = tr('Subtitles', 'Υπότιτλοι');
-            this.button.title = title; this.button.setAttribute('aria-label', title); this.panel.setAttribute('aria-label', title);
-            this.panel.querySelector('.ncvs-heading').textContent = title;
+            this.button.title = appName + ' · ' + tr('Subtitles', 'Υπότιτλοι');
             this.close.textContent = tr('Close', 'Κλείσιμο');
             for (const label of this.panel.querySelectorAll('[data-ncvs-english]')) label.textContent = tr(label.dataset.ncvsEnglish, label.dataset.ncvsGreek);
             this.select.options[0].textContent = tr('Off', 'Ανενεργοί');

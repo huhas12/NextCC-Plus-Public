@@ -6,9 +6,11 @@ namespace OCA\VideoSubtitles\Listener;
 use OCA\VideoSubtitles\AppInfo\Application;
 use OCA\Files_Sharing\Event\BeforeTemplateRenderedEvent;
 use OCA\VideoSubtitles\Service\PublicLinkService;
+use OCP\App\IAppManager;
 use OCP\AppFramework\Services\IInitialState;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
+use OCP\IURLGenerator;
 use OCP\IUserSession;
 use OCP\Util;
 
@@ -16,8 +18,13 @@ use OCP\Util;
 final class LoadPlayer implements IEventListener {
     private static bool $loaded = false;
 
-    public function __construct(private IUserSession $userSession, private PublicLinkService $publicLinks,
-        private IInitialState $initialState) {
+    public function __construct(
+        private IUserSession $userSession,
+        private PublicLinkService $publicLinks,
+        private IInitialState $initialState,
+        private IAppManager $appManager,
+        private IURLGenerator $urlGenerator,
+    ) {
     }
 
     public function handle(Event $event): void {
@@ -35,6 +42,11 @@ final class LoadPlayer implements IEventListener {
         }
         if (self::$loaded) return;
         self::$loaded = true;
+        $version = $this->appManager->getAppVersion(Application::APP_ID);
+        $this->initialState->provideInitialState('branding', [
+            'version' => $version,
+            'logoUrl' => $this->urlGenerator->linkTo(Application::APP_ID, 'img/nextcc-logo.png', ['v' => $version]),
+        ]);
         Util::addScript(Application::APP_ID, 'subtitle-core');
         Util::addScript(Application::APP_ID, 'subtitle-options');
         Util::addScript(Application::APP_ID, 'subtitle-ui');

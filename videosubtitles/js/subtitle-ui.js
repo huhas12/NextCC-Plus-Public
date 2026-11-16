@@ -197,7 +197,7 @@
             this.menu = node('select');
             this.menu.append(new Option('', 'auto'), new Option('English', 'en'), new Option('Ελληνικά', 'el'));
             this.bind(this.menu.options[0], 'Follow Nextcloud', 'Γλώσσα Nextcloud');
-            this.field(languages, this.menu, 'CC+ menu language', 'Γλώσσα μενού CC+');
+            this.field(languages, this.menu, 'NextCC+ menu language', 'Γλώσσα μενού NextCC+');
             this.on(this.menu, 'change', () => persist({ menuLanguage: this.menu.value }));
             this.languageSelectors = [1, 2, 3].map(priority => {
                 const select = node('select');
@@ -223,7 +223,7 @@
             this.publicSetup = this.section('Public links (administrator)', 'Δημόσιοι σύνδεσμοι (διαχειριστής)');
             this.publicSetup.hidden = !canConfigureApplicationKey;
             this.publicEnabled = node('input'); this.publicEnabled.type = 'checkbox'; this.publicEnabled.checked = publicLinksEnabled;
-            this.field(this.publicSetup, this.publicEnabled, 'Enable CC+ on read-only public links', 'Ενεργοποίηση CC+ σε δημόσιους συνδέσμους μόνο για ανάγνωση').parentElement.classList.add('ncvs-field--checkbox');
+            this.field(this.publicSetup, this.publicEnabled, 'Enable NextCC+ on read-only public links', 'Ενεργοποίηση NextCC+ σε δημόσιους συνδέσμους μόνο για ανάγνωση').parentElement.classList.add('ncvs-field--checkbox');
             const publicNote = node('p', 'ncvs-note');
             this.bind(publicNote, 'Off by default. Links with upload, edit or delete permissions are excluded. Guests can read shared subtitles or load a local file in browser memory; saving to Nextcloud and account access are unavailable.', 'Αρχικά ανενεργό. Εξαιρούνται σύνδεσμοι με δικαιώματα μεταφόρτωσης, επεξεργασίας ή διαγραφής. Οι επισκέπτες διαβάζουν κοινόχρηστους υπότιτλους ή φορτώνουν τοπικό αρχείο στη μνήμη του browser· η αποθήκευση στο Nextcloud και η πρόσβαση σε λογαριασμούς δεν διατίθενται.');
             this.publicSetup.append(publicNote);
@@ -278,7 +278,7 @@
             const websiteSection = this.section('Use the OpenSubtitles website', 'Χρήση του site OpenSubtitles');
             const websiteLink = this.bind(node('a'), 'Open OpenSubtitles.com', 'Άνοιγμα OpenSubtitles.com'); websiteLink.href = 'https://www.opensubtitles.com/en'; websiteLink.target = '_blank'; websiteLink.rel = 'noopener noreferrer'; websiteSection.append(websiteLink);
             const websiteNote = node('p', 'ncvs-note');
-            this.bind(websiteNote, 'Without an application key, use the website to find and download a subtitle, then choose Load from computer in CC+. This manual route uses no API key; the website handles your own account and download limits.', 'Αν δεν έχει ρυθμιστεί key εφαρμογής, βρες και κατέβασε τον υπότιτλο από το site και μετά επίλεξε Φόρτωση από υπολογιστή στο CC+. Αυτή η χειροκίνητη επιλογή δεν χρησιμοποιεί API key· το site διαχειρίζεται τον λογαριασμό και τα όρια λήψεών σου.');
+            this.bind(websiteNote, 'Without an application key, use the website to find and download a subtitle, then choose Load from computer in NextCC+. This manual route uses no API key; the website handles your own account and download limits.', 'Αν δεν έχει ρυθμιστεί key εφαρμογής, βρες και κατέβασε τον υπότιτλο από το site και μετά επίλεξε Φόρτωση από υπολογιστή στο NextCC+. Αυτή η χειροκίνητη επιλογή δεν χρησιμοποιεί API key· το site διαχειρίζεται τον λογαριασμό και τα όρια λήψεών σου.');
             websiteSection.append(websiteNote); online.append(websiteSection);
 
             this.query = node('input'); this.query.type = 'text'; this.query.maxLength = 250;
