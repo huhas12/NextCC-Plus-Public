@@ -9,6 +9,7 @@ use OCP\IConfig;
 final class PreferenceService {
     public const DEFAULTS = [
         'menuLanguage' => 'auto', 'subtitleLanguages' => [], 'encoding' => 'auto',
+        'webSearch' => ['custom' => [], 'selected' => ['google']],
         'backgroundEnabled' => true, 'backgroundColor' => '#000000', 'backgroundOpacity' => 0.72,
         'shadowEnabled' => true, 'shadowDepth' => 2, 'textColor' => '#ffffff', 'fontSize' => 24, 'verticalPosition' => 100, 'verticalOffset' => 0,
     ];
@@ -39,7 +40,32 @@ final class PreferenceService {
             $out['subtitleLanguages'] = array_slice(array_values(array_unique(array_filter($input['subtitleLanguages'],
                 static fn ($value) => is_string($value) && (bool)preg_match('/^[a-z]{2,3}(?:-[a-z]{2,3})?$/D', $value)))), 0, 3);
         }
+        if (isset($input['webSearch']) && is_array($input['webSearch'])) {
+            $out['webSearch'] = self::webSearch($input['webSearch']);
+        }
         return $out;
+    }
+
+    private static function webSearch(array $settings): array {
+        $allowed = array_fill_keys(['google', 'bing', 'duckduckgo', 'brave', 'startpage', 'ecosia', 'qwant', 'yahoo'], true);
+        $custom = [];
+        foreach (is_array($settings['custom'] ?? null) ? $settings['custom'] : [] as $engine) {
+            $name = is_string($engine['name'] ?? null) ? trim($engine['name']) : '';
+            $url = is_string($engine['url'] ?? null) ? trim($engine['url']) : '';
+            if ($name === '' || mb_strlen($name) > 80 || mb_strlen($url) > 2048 || isset($allowed[$url])
+                || substr_count($url, '{query}') !== 1 || !preg_match('~^https://[^/?#{}@\\\\]+[/?#]~i', $url)) continue;
+            $test = str_replace('{query}', 'test', $url);
+            if (preg_match('~[\s\\\\\x00-\x1f\x7f{}]~u', $test)) continue;
+            $parts = parse_url($test);
+            if (empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])) continue;
+            $allowed[$url] = true;
+            $custom[] = ['name' => $name, 'url' => $url];
+        }
+        $selected = [];
+        foreach (is_array($settings['selected'] ?? null) ? $settings['selected'] : ['google'] as $id) {
+            if (is_string($id) && isset($allowed[$id])) $selected[$id] = true;
+        }
+        return ['custom' => $custom, 'selected' => array_keys($selected)];
     }
 
     public function get(string $uid): array {
@@ -48,6 +74,9 @@ final class PreferenceService {
     }
 
     public function save(string $uid, array $preferences): array {
+        if (!array_key_exists('webSearch', $preferences)) {
+            $preferences['webSearch'] = $this->get($uid)['webSearch'];
+        }
         $clean = self::normalize($preferences);
         $this->config->setUserValue($uid, 'videosubtitles', 'preferences', json_encode($clean, JSON_THROW_ON_ERROR));
         return $clean;

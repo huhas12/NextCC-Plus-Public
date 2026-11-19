@@ -303,7 +303,7 @@
             online.append(pages);
             this.saveButton = this.button(online, 'Save downloaded SRT beside video', 'Αποθήκευση SRT στον φάκελο του βίντεο', () => this.saveSubtitle());
             this.on(online, 'toggle', () => { if (online.open) this.updateConnection(); });
-            this.addSubtitleWebsites();
+            this.buildWebSearch();
             views.add(this);
             this.refresh();
         }
@@ -332,24 +332,133 @@
             const input = node('input'); input.type = 'number'; input.min = String(min); input.max = String(max); input.step = '1';
             this.field(parent, input, en, el); return input;
         }
-        addSubtitleWebsites() {
-            const section = this.section('Subtitle websites', 'Ιστότοποι υποτίτλων');
-            const note = this.bind(node('p', 'ncvs-note'),
-                'Find and download an SRT or VTT on a subtitle website, then choose Load from computer. If you receive a ZIP, extract the subtitle first.',
-                'Βρες και κατέβασε SRT ή VTT από έναν ιστότοπο υποτίτλων και επίλεξε Φόρτωση από υπολογιστή. Αν κατέβει ZIP, αποσυμπίεσε πρώτα τον υπότιτλο.');
-            const list = node('ul');
-            for (const [label, url] of [
-                ['OpenSubtitles.org', 'https://www.opensubtitles.org/'],
-                ['SubtitleCat (Ελληνικά)', 'https://www.subtitlecat.com/subs/12/Greek.html'],
-                ['Kodi subtitle add-ons', 'https://kodi.tv/addons/omega/category/subtitles/'],
-            ]) {
-                const item = node('li');
-                const link = node('a', 'ncvs-resource-link', label);
-                link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer';
-                item.append(link); list.append(item);
-            }
-            section.append(note, list);
+        buildWebSearch() {
+            const section = this.section('Web search', 'Αναζήτηση στο διαδίκτυο');
+            this.webMode = node('select');
+            this.webMode.append(this.bind(new Option('', 'title'), 'Movie title', 'Τίτλος ταινίας'),
+                this.bind(new Option('', 'hash'), 'Video hash', 'Hash βίντεο'));
+            this.field(section, this.webMode, 'Search by', 'Αναζήτηση με');
+            this.webTitle = node('input'); this.webTitle.type = 'text'; this.webTitle.maxLength = 250;
+            this.field(section, this.webTitle, 'Title to search for', 'Τίτλος για αναζήτηση');
+            this.on(this.webTitle, 'input', () => this.refreshWebQuery());
+            this.on(this.webMode, 'change', () => {
+                if (this.webMode.value === 'hash') this.prepareWebHash();
+                else { this.webHashRequest?.abort(); this.webHashRequest = null; this.refreshWebQuery(); }
+            });
+            this.webPreview = node('p', 'ncvs-online-status'); this.webPreview.setAttribute('role', 'status');
+            section.append(this.webPreview);
+            this.webButton = this.button(section, '', '', () => {
+                for (const link of this.webLinks.querySelectorAll('a')) window.open(link.href, '_blank', 'noopener,noreferrer');
+            });
+            this.webButton.classList.add('ncvs-action--primary');
+            this.webLinks = node('div', 'ncvs-web-links'); section.append(this.webLinks);
+            const settings = this.section('Search settings', 'Ρυθμίσεις αναζήτησης');
+            section.append(settings);
+            this.engineList = node('div', 'ncvs-engine-list'); settings.append(this.engineList);
+            this.on(this.engineList, 'change', event => {
+                const input = event.target;
+                if (input.type !== 'checkbox') return;
+                const current = preferences.webSearch;
+                const selected = current.selected.filter(id => id !== input.value);
+                if (input.checked) selected.push(input.value);
+                persist({ webSearch: { ...current, selected } });
+            });
+            this.on(this.engineList, 'click', event => {
+                const button = event.target.closest('button');
+                if (!button) return;
+                const current = preferences.webSearch;
+                persist({ webSearch: { selected: current.selected.filter(id => id !== button.value),
+                    custom: current.custom.filter(engine => engine.url !== button.value) } });
+                this.customName.focus();
+            });
+            this.customName = node('input'); this.customName.type = 'text'; this.customName.maxLength = 80;
+            this.customUrl = node('input'); this.customUrl.type = 'text'; this.customUrl.maxLength = 2048;
+            this.customUrl.placeholder = 'https://search.example.org/search?q={query}';
+            this.field(settings, this.customName, 'Search engine name', 'Όνομα μηχανής αναζήτησης');
+            this.field(settings, this.customUrl, 'Search URL with {query}', 'Διεύθυνση αναζήτησης με {query}');
+            this.button(settings, 'Add search engine', 'Προσθήκη μηχανής', () => this.addSearchEngine());
+            this.engineStatus = node('p', 'ncvs-pref-status'); this.engineStatus.setAttribute('role', 'status');
+            settings.append(this.engineStatus);
             this.player.panel.insertBefore(section, this.player.status);
+        }
+        addSearchEngine() {
+            const name = this.customName.value.trim();
+            const url = this.customUrl.value.trim();
+            if (!name || !O.validSearchTemplate(url)) {
+                this.engineStatus.textContent = t('Enter a name and an HTTPS search URL containing {query} in its path or query string.',
+                    'Συμπλήρωσε όνομα και διεύθυνση HTTPS με {query} στη θέση του όρου αναζήτησης.');
+                (name ? this.customUrl : this.customName).focus(); return;
+            }
+            if (this.webEngines.some(engine => engine.url === url)) {
+                this.engineStatus.textContent = t('This search engine is already listed.', 'Αυτή η μηχανή υπάρχει ήδη.'); return;
+            }
+            const { custom, selected } = preferences.webSearch;
+            persist({ webSearch: { custom: [...custom, { name, url }], selected: [...selected, url] } });
+            this.customName.value = ''; this.customUrl.value = '';
+            this.engineStatus.textContent = t('Added ', 'Προστέθηκε η μηχανή ') + name;
+        }
+        refreshWebEngines() {
+            const { custom, selected } = preferences.webSearch;
+            const signature = JSON.stringify([language(), custom]);
+            if (signature !== this.engineSignature) {
+                this.engineSignature = signature;
+                this.webEngines = [...O.SEARCH_ENGINES, ...custom.map(engine => ({ ...engine, id: engine.url, custom: true }))];
+                this.engineList.replaceChildren();
+                for (const engine of this.webEngines) {
+                    const row = node('div', 'ncvs-engine-row');
+                    const label = node('label', 'ncvs-field ncvs-field--checkbox');
+                    const box = node('input'); box.type = 'checkbox'; box.value = engine.id;
+                    label.append(node('span', '', engine.name), box); row.append(label);
+                    if (engine.custom) {
+                        const remove = node('button', 'ncvs-action', t('Remove', 'Αφαίρεση'));
+                        remove.type = 'button'; remove.value = engine.id;
+                        remove.setAttribute('aria-label', remove.textContent + ' ' + engine.name); row.append(remove);
+                    }
+                    this.engineList.append(row);
+                }
+            }
+            for (const box of this.engineList.querySelectorAll('input')) box.checked = selected.includes(box.value);
+            this.refreshWebQuery();
+        }
+        refreshWebQuery() {
+            const hashMode = this.webMode.value === 'hash';
+            this.webTitle.parentElement.hidden = hashMode;
+            const query = O.webQuery((hashMode ? this.webHash : this.webTitle.value) || '', currentLanguages()[0]);
+            let hint = query;
+            if (hashMode && !query) {
+                if (this.webHashRequest) hint = t('Reading video hash…', 'Υπολογισμός hash…');
+                else if (this.webHashError === 'quota_or_rate_limit') hint = t('Too many hash requests. Try again later.', 'Έγιναν πολλοί υπολογισμοί hash. Δοκίμασε αργότερα.');
+                else hint = message(new Error(this.webHashError || 'invalid_video_path'));
+            }
+            this.webPreview.textContent = hint;
+            const selected = this.webEngines.filter(engine => preferences.webSearch.selected.includes(engine.id));
+            this.webButton.disabled = !query || !selected.length;
+            if (selected.length === 1) this.webButton.textContent = t('Search · ', 'Αναζήτηση · ') + selected[0].name;
+            else if (selected.length) this.webButton.textContent = t('Search in ', 'Αναζήτηση σε ') + selected.length + t(' engines', ' μηχανές');
+            else this.webButton.textContent = t('Select a search engine', 'Επίλεξε μηχανή αναζήτησης');
+            this.webLinks.replaceChildren();
+            if (!query) return;
+            for (const engine of selected) {
+                const link = node('a', 'ncvs-resource-link', t('Open ', 'Άνοιγμα ') + engine.name);
+                link.href = O.searchUrl(engine.url, query); link.target = '_blank'; link.rel = 'noopener noreferrer';
+                this.webLinks.append(link);
+            }
+        }
+        async prepareWebHash() {
+            this.webHashRequest?.abort(); this.webHashRequest = null; this.webHashError = '';
+            const path = this.player.context?.path;
+            if (!path || this.webHash) { this.refreshWebQuery(); return; }
+            const controller = new AbortController();
+            this.webHashRequest = controller; this.refreshWebQuery();
+            try {
+                const data = await api('movie-hash', 'POST', { videoPath: path }, controller.signal);
+                if (typeof data.hash !== 'string' || !/^[a-f0-9]{16}$/.test(data.hash)) throw new Error('hash_unavailable');
+                if (!controller.signal.aborted) this.webHash = data.hash;
+            } catch (error) {
+                if (!controller.signal.aborted) this.webHashError = error.message;
+            } finally {
+                if (this.webHashRequest === controller && !this.dead) { this.webHashRequest = null; this.refreshWebQuery(); }
+            }
         }
         buildSync() {
             this.syncSection = this.section('Sync and export', 'Συγχρονισμός και εξαγωγή');
@@ -532,7 +641,7 @@
                 this.player.encoding.value = preferences.encoding;
                 if (this.player.bytes) this.player.applyBytes(this.player.bytes, this.player.loadedName);
             }
-            if (!publicShare) { this.updateConnection(); if (menuChanged) this.renderResults(); this.updateDownloadActions(); }
+            if (!publicShare) { this.updateConnection(); if (menuChanged) this.renderResults(); this.updateDownloadActions(); this.refreshWebEngines(); }
         }
 
         populateLanguages() {
@@ -634,6 +743,9 @@
             this.operation?.abort(); this.busy = false; this.results = []; this.page = 1; this.totalPages = 1;
             this.downloaded = null; this.onlineStatus.textContent = '';
             const metadata = O.guessMetadata(this.player.context?.name || '');
+            this.webHashRequest?.abort(); this.webHashRequest = null;
+            this.webHash = ''; this.webHashError = ''; this.webMode.value = 'title'; this.webTitle.value = metadata.query;
+            this.refreshWebQuery();
             this.query.value = metadata.query;
             for (const key of ['year', 'season', 'episode']) this[key].value = metadata[key] ? String(metadata[key]) : '';
             this.renderResults(); this.updateBusy(); this.updateDownloadActions();
@@ -722,7 +834,7 @@
             } catch (_) { if (!this.dead && generation === this.player.generation) this.onlineStatus.textContent = t('Could not save the subtitle.', 'Δεν αποθηκεύτηκε ο υπότιτλος.'); }
             finally { this.busy = false; if (!this.dead) { this.updateBusy(); this.updateDownloadActions(); } }
         }
-        destroy() { this.dead = true; this.operation?.abort(); this.syncWrite?.abort(); this.events.abort(); this.resultEvents.abort(); views.delete(this); if (this.password) this.password.value = ''; if (this.key) this.key.value = ''; }
+        destroy() { this.dead = true; this.webHashRequest?.abort(); this.operation?.abort(); this.syncWrite?.abort(); this.events.abort(); this.resultEvents.abort(); views.delete(this); if (this.password) this.password.value = ''; if (this.key) this.key.value = ''; }
     }
 
     window.NCVideoSubtitlesUI = { initialize, attach: player => new OptionsView(player), t, persist, publicShare,

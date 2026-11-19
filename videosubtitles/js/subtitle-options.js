@@ -7,7 +7,56 @@
     else root.NCVideoSubtitleOptions = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
-    const DEFAULTS = Object.freeze({ menuLanguage: 'auto', subtitleLanguages: [], encoding: 'auto',
+    const SEARCH_ENGINES = [
+        ['google', 'Google', 'https://www.google.com/search?q={query}'],
+        ['bing', 'Bing', 'https://www.bing.com/search?q={query}'],
+        ['duckduckgo', 'DuckDuckGo', 'https://duckduckgo.com/?q={query}'],
+        ['brave', 'Brave Search', 'https://search.brave.com/search?q={query}'],
+        ['startpage', 'Startpage', 'https://www.startpage.com/sp/search?query={query}'],
+        ['ecosia', 'Ecosia', 'https://www.ecosia.org/search?q={query}'],
+        ['qwant', 'Qwant', 'https://www.qwant.com/?q={query}'],
+        ['yahoo', 'Yahoo Search', 'https://search.yahoo.com/search?p={query}'],
+    ].map(([id, name, url]) => ({ id, name, url }));
+    function validSearchTemplate(value) {
+        if (typeof value !== 'string' || value.length > 2048 || value.split('{query}').length !== 2
+            || !/^https:\/\/[^/?#{}@\\]+[/?#]/i.test(value) || /[\s\\\x00-\x1f\x7f{}]/u.test(value.replace('{query}', ''))) return false;
+        try {
+            const url = new URL(value.replace('{query}', 'test'));
+            return url.protocol === 'https:' && !!url.hostname && !url.username && !url.password;
+        } catch (_) { return false; }
+    }
+    function searchSettings(value = {}) {
+        const custom = [];
+        const templates = new Set(SEARCH_ENGINES.map(engine => engine.url));
+        for (const engine of Array.isArray(value?.custom) ? value.custom : []) {
+            const name = typeof engine?.name === 'string' ? engine.name.trim() : '';
+            const url = typeof engine?.url === 'string' ? engine.url.trim() : '';
+            if (!name || [...name].length > 80 || !validSearchTemplate(url) || templates.has(url)) continue;
+            templates.add(url);
+            custom.push({ name, url });
+        }
+        const valid = new Set([...SEARCH_ENGINES.map(engine => engine.id), ...custom.map(engine => engine.url)]);
+        const selected = Array.isArray(value?.selected) ? [...new Set(value.selected.filter(id => valid.has(id)))] : ['google'];
+        return { custom, selected };
+    }
+    function webQuery(term, code) {
+        if (!term.trim()) return '';
+        const local = { el: 'ελληνικοί υπότιτλοι', en: 'English subtitles', fr: 'sous-titres français',
+            de: 'deutsche Untertitel', it: 'sottotitoli italiani', es: 'subtítulos en español',
+            pt: 'legendas em português', 'pt-br': 'legendas em português do Brasil' };
+        let suffix = local[code];
+        if (!suffix) {
+            let name = code;
+            try { name = new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; } catch (_) { /* use language code */ }
+            suffix = name + ' subtitles';
+        }
+        return term.trim() + ' ' + suffix;
+    }
+    function searchUrl(template, query) {
+        if (!query || !validSearchTemplate(template)) return '';
+        return new URL(template.replace('{query}', () => encodeURIComponent(query))).href;
+    }
+    const DEFAULTS = Object.freeze({ menuLanguage: 'auto', subtitleLanguages: [], encoding: 'auto', webSearch: searchSettings(),
         backgroundEnabled: true, backgroundColor: '#000000', backgroundOpacity: 0.72,
         shadowEnabled: true, shadowDepth: 2, textColor: '#ffffff', fontSize: 24, verticalPosition: 100, verticalOffset: 0 });
     const ENCODINGS = ['auto', 'utf-8', 'windows-1253', 'utf-16le', 'utf-16be', 'windows-1252',
@@ -16,7 +65,7 @@
     // A local fallback is available before an API key/account is connected.
     const LANGUAGE_CODES = ('af sq am ar hy as az eu be bn bs br bg my ca zh-cn zh-tw zh cs da nl en eo et fi fr gl ka de el gu he hi hu is id it ja kn kk km ko ku lo lv lt lb mk ms ml mt mn ne no nn oc fa pl pt pt-br ro ru sr si sk sl so es es-mx sw sv tl ta te th tr uk ur uz vi cy').split(' ');
     function normalize(input = {}) {
-        const result = { ...DEFAULTS, subtitleLanguages: [] };
+        const result = { ...DEFAULTS, subtitleLanguages: [], webSearch: searchSettings(input.webSearch) };
         for (const [key, allowed] of [['menuLanguage', ['auto', 'en', 'el']], ['encoding', ENCODINGS]]) if (allowed.includes(input[key])) result[key] = input[key];
         for (const key of ['backgroundEnabled', 'shadowEnabled']) if (typeof input[key] === 'boolean') result[key] = input[key];
         for (const key of ['backgroundColor', 'textColor']) if (typeof input[key] === 'string' && /^#[0-9a-f]{6}$/i.test(input[key])) result[key] = input[key].toLowerCase();
@@ -68,5 +117,6 @@
     function syncName(filename, format) {
         return `${safeStem(filename) || 'subtitle'}.synced.${format}`;
     }
-    return { DEFAULTS, ENCODINGS, LANGUAGE_CODES, normalize, menuLanguage, preferredLanguages, appearance, placementOffset, guessMetadata, saveName, syncName };
+    return { DEFAULTS, ENCODINGS, LANGUAGE_CODES, SEARCH_ENGINES, validSearchTemplate, webQuery, searchUrl,
+        normalize, menuLanguage, preferredLanguages, appearance, placementOffset, guessMetadata, saveName, syncName };
 }));
