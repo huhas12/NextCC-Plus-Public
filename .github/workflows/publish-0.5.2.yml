@@ -1,0 +1,30 @@
+name: Publish NextCC+ 0.5.2
+on:
+  push:
+    branches: [publish-nextcc-0.5.2]
+    paths: ['.github/workflows/publish-0.5.2.yml']
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Publish verified package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s  %s\n' 'ef1e61098c0624ce45bd002a7617c2fb5bc46b0287a75abedbaa3bd0e7b47d85' 'dist/videosubtitles-0.5.2.tar.gz' | sha256sum --check
+          cat > "$RUNNER_TEMP/nextcc-release-notes.md" <<'NOTES'
+          NextCC+ can now search for subtitles using one or more web search engines. The default searches for the movie title and your first preferred subtitle language. Select the video hash to search for a specific file instead.
+          
+          - Choose from eight search engines or add a personal HTTPS search URL with `{query}`.
+          - Save selections per Nextcloud account and open results together or individually.
+          - The previous subtitle websites directory has been removed. OpenSubtitles.com account sign-in, search and downloads are available in their existing panel.
+          
+          For Nextcloud 35 with Viewer enabled and PHP 8.3 or newer.
+          NOTES
+          gh release create v0.5.2 'dist/videosubtitles-0.5.2.tar.gz' --repo "$GITHUB_REPOSITORY" --title 'NextCC+ 0.5.2' --target '59e3ff416661fe89b113a5033c60aaff23cfa65b' --notes-file "$RUNNER_TEMP/nextcc-release-notes.md"
