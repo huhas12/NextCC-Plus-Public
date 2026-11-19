@@ -75,6 +75,12 @@ final class ApiController extends Controller {
     }
 
     #[NoAdminRequired]
+    #[UserRateLimit(limit: 30, period: 60)]
+    public function movieHash(string $videoPath = ''): DataResponse {
+        return $this->respond(fn () => ['hash' => $this->hashes->calculate($this->uid(), $videoPath)['hash']]);
+    }
+
+    #[NoAdminRequired]
     #[UserRateLimit(limit: 5, period: 300)]
     public function connect(string $username = '', string $password = '', string $apiKey = ''): DataResponse {
         return $this->respond(fn () => ['connection' => $this->subtitles->connect($this->uid(), $username, $password, $apiKey)]);

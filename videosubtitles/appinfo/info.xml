@@ -8,8 +8,8 @@
 
 Use one timing point to shift subtitles or a second to correct drift. Preview the result and export a new SRT or WebVTT copy. Signed-in users with folder write access can save the copy beside the video. Administrators can enable playback and local export on read-only public links.
 
-NextCC+ includes optional OpenSubtitles.com search by title or video hash and links to subtitle websites for manual download and import.]]></description>
-  <version>0.5.1</version>
+Search the web by movie title or video hash in your first preferred subtitle language. Choose one or more search engines or add a custom search URL. NextCC+ also includes OpenSubtitles.com account sign-in, search and download.]]></description>
+  <version>0.5.2</version>
   <licence>AGPL-3.0-or-later</licence>
   <author>Dimitrios Kokkotis</author>
   <namespace>VideoSubtitles</namespace>
